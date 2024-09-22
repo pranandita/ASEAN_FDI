@@ -1,0 +1,393 @@
+---
+title: "Final project"
+author: "Pranandita & Risolat"
+date: "08/01/2024"
+output: 
+  html_document:
+    code_folding: hide 
+---
+
+```{css, echo=FALSE}
+.scroll-200 {
+  max-height: 200px;
+  overflow-y: auto;
+  background-color: inherit;
+}
+h1, h2, h3 {
+  text-align: center;
+}
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+library(knitr)
+library(kableExtra)
+library(ggplot2)
+library(dplyr)
+library(questionr)
+library(dplyr)
+library(ggpmisc)
+library(broom)
+library(tinytex)
+library(stargazer)
+library(sandwich)
+library(readr)
+library(readxl)
+library(tidyverse)
+library(plm)
+library(corrplot)
+library(Hmisc)
+library(lmtest)
+library(corrplot)
+library(ggResidpanel)
+```
+
+
+
+```{r}
+data <- read_excel("New_DATA.xlsx")
+```
+
+
+### Correlation matrix
+<p style="text-align:center;"> __Linear variables:__ </p>
+
+```{r, results='asis', message=FALSE, warning=FALSE, fig.align = 'center'}
+
+corr_data <- select(data, fdi, ps, gdp, gdp_g, cpi, t_o)
+corr_data <- na.omit(corr_data)
+
+corr_matrix <- cor(corr_data)
+kable(corr_matrix, format = "html", caption = "Correlation matrix") %>%
+  kable_styling(full_width = FALSE)
+corrplot(corr_matrix)
+```
+\
+
+
+<p style="text-align:center;"> __With log(FDI) and log(GDP):__ </p>
+
+```{r, results='asis', message=FALSE, warning=FALSE, fig.align = 'center'}
+
+corr_data <- corr_data %>%
+  mutate(log_fdi = log(fdi), log_gdp = log(gdp)) %>%
+  select(-fdi, -gdp)
+corr_data <- na.omit(corr_data)
+
+corr_matrix <- cor(corr_data)
+kable(corr_matrix, format = "html", caption = "Correlation matrix") %>%
+  kable_styling(full_width = FALSE)
+corrplot(corr_matrix)
+```
+
+
+
+### Regressions
+
+Here, we present separately the regressions of FDI on political stability with real GDP, growth rate, CPI, and trade openness as controls. We use log of FDI and real GDP; all other variables are linear. 
+
+We add the independent and control variables one by one to the model and then perform pooled OLS and random and fixed effects regressions for each set of variables. For each, we perform the BPLM test (`pFtest`) to check for panel effects. Next, we perform the Hausman test (`phtest`) to decide between fixed and random effects models.
+
+The results are summarized separately for each set of models along with significance levels of all test statistics. 
+
+```{r, results='asis', message=FALSE, warning=FALSE}
+
+
+## only political stability 
+
+# pooled OLS
+pols1 = lm(log(fdi) ~ ps, data = data)
+
+# fixed effects
+f1 <- plm(log(fdi) ~ ps, index = c("country", "year"), data = data, model = "within")
+
+#random effects
+r1 <- plm(log(fdi) ~ ps, index = c("country", "year"), data = data, model = "random")
+
+# Hausman test 
+h1_stat <- round(phtest(f1, r1)$statistic, 2)
+h1_p <- round(phtest(f1, r1)$p.value, 4)
+
+# Breusch-Pagan LM test
+bplm1_stat <- round(pFtest(f1, pols1)$statistic, 2)
+bplm1_p <- sprintf("%.2e", pFtest(f1, pols1)$p.value)
+
+# Regression output #1
+
+stargazer(pols1, f1, r1, 
+          title="Regressions on FDI - only political stability (independent variable)",
+          type="html",
+          header=FALSE,
+          report = "vc*s",
+          dep.var.labels = c("FDI"),
+          column.labels = c("Pooled OLS", "Fixed effects", "Random effects"),
+          covariate.labels = c("Intercept", "Political stability"),
+          add.lines = list(
+            c("BPLM (FE)", "", "", ""),
+            c("statistic", bplm1_stat, "", ""),
+            c("p-value", bplm1_p, "", ""),
+            c("Hausman", "", "", ""),
+            c("statistic", h1_stat, "", ""),
+            c("p-value", h1_p, "", "")
+          ),
+          intercept.bottom = F,
+          digits = 2,
+          notes.align = "l",
+          notes = c("Dataset: World Bank Database", "lm() functions"))
+
+
+
+
+## political stability + gdp as control 
+
+# pooled OLS
+pols2 = lm(log(fdi) ~ ps + log(gdp), data = data)
+
+# fixed effects
+f2 <- plm(log(fdi) ~ ps + log(gdp), index = c("country", "year"), data = data, model = "within")
+
+#random effects
+r2 <- plm(log(fdi) ~ ps + log(gdp), index = c("country", "year"), data = data, model = "random")
+
+# Hausman test 
+h2_stat <- round(phtest(f2, r2)$statistic, 2)
+h2_p <- round(phtest(f2, r2)$p.value, 4)
+
+# Breusch-Pagan LM test
+bplm2_stat <- round(pFtest(f2, pols2)$statistic, 2)
+bplm2_p <- sprintf("%.2e", pFtest(f2, pols2)$p.value)
+
+# Regression output #2
+
+stargazer(pols2, f2, r2, 
+          title="Regressions on FDI - political stability (independent variable) + real GDP as control",
+          type="html",
+          header=FALSE,
+          report = "vc*s",
+          dep.var.labels = c("FDI"),
+          column.labels = c("Pooled OLS", "Fixed effects", "Random effects"),
+          covariate.labels = c("Intercept", "Political stability", "Log(GDP)"),
+          add.lines = list(
+            c("BPLM (FE)", "", "", ""),
+            c("statistic", bplm2_stat, "", ""),
+            c("p-value", bplm2_p, "", ""),
+            c("Hausman", "", "", ""),
+            c("statistic", h2_stat, "", ""),
+            c("p-value", h2_p, "", "")
+          ),
+          intercept.bottom = F,
+          digits = 2,
+          notes.align = "l",
+          notes = c("Dataset: World Bank Database", "lm() functions"))
+
+
+
+## political stability + gdp, growth as controls  
+
+# pooled OLS
+pols3 = lm(log(fdi) ~ ps + log(gdp) + gdp_g, data = data)
+
+# fixed effects
+f3 <- plm(log(fdi) ~ ps + log(gdp) + gdp_g, index = c("country", "year"), data = data, model = "within")
+
+#random effects
+r3 <- plm(log(fdi) ~ ps + log(gdp) + gdp_g, index = c("country", "year"), data = data, model = "random")
+
+# Hausman test 
+h3_stat <- round(phtest(f3, r3)$statistic, 2)
+h3_p <- round(phtest(f3, r3)$p.value, 4)
+
+# Breusch-Pagan LM test
+bplm3_stat <- round(pFtest(f3, pols3)$statistic, 2)
+bplm3_p <- sprintf("%.2e", pFtest(f3, pols3)$p.value)
+
+# Regression output #3
+
+stargazer(pols3, f3, r3, 
+          title="Regressions on FDI - political stability (independent variable) + real GDP and growth rate as controls",
+          type="html",
+          header=FALSE,
+          report = "vc*s",
+          dep.var.labels = c("FDI"),
+          column.labels = c("Pooled OLS", "Fixed effects", "Random effects"),
+          covariate.labels = c("Intercept", "Political stability", "Log(GDP)", "Growth rate"),
+          add.lines = list(
+            c("BPLM (FE)", "", "", ""),
+            c("statistic", bplm3_stat, "", ""),
+            c("p-value", bplm3_p, "", ""),
+            c("Hausman", "", "", ""),
+            c("statistic", h3_stat, "", ""),
+            c("p-value", h3_p, "", "")
+          ),
+          intercept.bottom = F,
+          digits = 2,
+          notes.align = "l",
+          notes = c("Dataset: World Bank Database", "lm() functions"))
+
+
+
+## political stability + gdp, growth, cpi as controls
+
+# pooled OLS
+pols4 = lm(log(fdi) ~ ps + log(gdp) + gdp_g + cpi, data = data)
+
+# fixed effects
+f4 <- plm(log(fdi) ~ ps + log(gdp) + gdp_g + cpi, index = c("country", "year"), data = data, model = "within")
+
+#random effects
+r4 <- plm(log(fdi) ~ ps + log(gdp) + gdp_g + cpi, index = c("country", "year"), data = data, model = "random")
+
+# Hausman test 
+h4_stat <- round(phtest(f4, r4)$statistic, 2)
+h4_p <- round(phtest(f4, r4)$p.value, 4)
+
+# Breusch-Pagan LM test
+bplm4_stat <- round(pFtest(f4, pols4)$statistic, 2)
+bplm4_p <- sprintf("%.2e", pFtest(f4, pols4)$p.value)
+
+stargazer(pols1, f4, r4, 
+          title="Regressions on FDI - political stability (independent variable) + real GDP, growth, and CPI as controls",
+          type="html",
+          header=FALSE,
+          report = "vc*s",
+          dep.var.labels = c("FDI"),
+          column.labels = c("Pooled OLS", "Fixed effects", "Random effects"),
+          covariate.labels = c("Intercept", "Political stability", "Log(GDP)", "Growth rate", "CPI"),
+          add.lines = list(
+            c("BPLM (FE)", "", "", ""),
+            c("statistic", bplm4_stat, "", ""),
+            c("p-value", bplm4_p, "", ""),
+            c("Hausman", "", "", ""),
+            c("statistic", h4_stat, "", ""),
+            c("p-value", h4_p, "", "")
+          ),
+          intercept.bottom = F,
+          digits = 2,
+          notes.align = "l",
+          notes = c("Dataset: World Bank Database", "lm() functions"))
+
+
+
+
+## political stability + gdp, growth, cpi, trade openness as controls  
+
+# pooled OLS
+pols5 = lm(log(fdi) ~ ps + log(gdp) + gdp_g + cpi + t_o, data = data)
+
+# fixed effects
+f5 <- plm(log(fdi) ~ ps + log(gdp) + gdp_g + cpi + t_o, index = c("country", "year"), data = data, model = "within")
+
+#random effects
+r5 <- plm(log(fdi) ~ ps + log(gdp) + gdp_g + cpi + t_o, index = c("country", "year"), data = data, model = "random")
+
+# Hausman test 
+h5_stat <- round(phtest(f5, r5)$statistic, 2)
+h5_p <- round(phtest(f5, r5)$p.value, 4)
+
+# Breusch-Pagan LM test
+bplm5_stat <- round(pFtest(f5, pols5)$statistic, 2)
+bplm5_p <- round(pFtest(f5, pols5)$p.value, 4)
+
+# Regression output #5
+
+stargazer(pols5, f5, r5, 
+          title="Regressions on FDI - political stability (independent variable) + real GDP, growth, CPI, and trade openness as controls",
+          type="html",
+          header=FALSE,
+          report = "vc*s",
+          dep.var.labels = c("FDI"),
+          column.labels = c("Pooled OLS", "Fixed effects", "Random effects"),
+          covariate.labels = c("Intercept", "Political stability", "Log(GDP)", "Growth rate", "CPI", "Trade openness"),
+          add.lines = list(
+            c("BPLM (FE)", "", "", ""),
+            c("statistic", bplm5_stat, "", ""),
+            c("p-value", bplm5_p, "", ""),
+            c("Hausman", "", "", ""),
+            c("statistic", h5_stat, "", ""),
+            c("p-value", h5_p, "", "")
+          ),
+          intercept.bottom = F,
+          digits = 2,
+          notes.align = "l",
+          notes = c("Dataset: World Bank Database", "lm() functions"))
+
+ 
+```
+
+### Final results
+
+Based on the results of the BPLM and Hausman tests, we choose the appropriate model specification for each set of independent and control variables. The final results of the chosen models are summarized here. 
+
+```{r, results='asis', message=FALSE, warning=FALSE}
+
+stargazer(r1, r2, f3, r4, f5, 
+          title="Final models",
+          type="html",
+          header=FALSE,
+          report = "vc*s",
+          dep.var.labels = c("FDI"),
+          column.labels = c("Model #1", "Model #2", "Model #3", "Model #4", "Model #5"),
+          covariate.labels = c("Intercept", "Political stability", "Log(GDP)", "Growth rate", "CPI", "Trade openness"),
+          add.lines = list(
+            c("", "Random", "Random", "Fixed", "Random", "Fixed"),
+            c("BPLM", paste(as.character(bplm1_stat),"***"), paste(as.character(bplm2_stat),"***"), paste(as.character(bplm3_stat),"***"), paste(as.character(bplm4_stat),"***"), paste(as.character(bplm5_stat),"**")),
+            c("Hausman", h1_stat, h2_stat, paste(as.character(h3_stat),"**"), h4_stat, paste(as.character(h5_stat),"**"))
+          ),
+          intercept.bottom = F,
+          digits = 2,
+          notes.align = "l",
+          notes = c("Dataset: World Bank Database", "lm() functions"))
+
+
+
+```
+
+
+### Testing assumptions
+
+We test here the Gauss-Markov assumptions for the selected model: Model #4 (`log(fdi) ~ ps + log(gdp) + gdp_g + cpi`).
+
+```{r, results='asis', message=FALSE, warning=FALSE}
+
+## BPLM
+bp <- bptest(f4)
+bp_stat <- round(bptest(f4)$statistic, 2)
+bp_p <- round(bptest(f4)$p.value, 4)
+
+## Wooldridge test
+wooldridge <- pbgtest(f4)
+wooldridge_stat <- round(pbgtest(f4)$statistic, 2)
+wooldridge_p <- round(pbgtest(f4)$p.value, 4)
+
+
+```
+\
+
+The following table presents the results of tests performed to verify assumptions.
+
+```{r, results='asis', message=FALSE, warning=FALSE}
+assumptions_table <- data.frame(
+  Assumption = c("Homoskedasticity", "No autocorrelation", "Exogeneity", "No spherical errors"),
+  Test = c("Breusch-Pagan Lagrangian multipliers", "Wooldridge serial correlation", "Hausman", "Breusch-Pagan Lagrangian multipliers"),
+  Statistic = c(bp_stat, wooldridge_stat, h4_stat, bp_stat),
+  p = c(bp_p, wooldridge_p, h4_p, bp_p),
+  Satisfied = c("Yes", "Yes", "Yes", "Yes")
+)
+
+assumptions_table %>%
+  kable(caption = "Gauss--Markov assumption tests") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+As none of the test statistics are signficant, we conclude that the assumptions are satisfied. 
+\
+
+To test for the no multicollinearity assumption, we create the correlation matrix of the coefficients of the regression. 
+
+```{r, results='asis', message=FALSE, warning=FALSE}
+
+## Multicollinearity: Correlation matrix
+correlation_matrix <- cor(f4$model[, -1])
+kable(correlation_matrix, format = "markdown")
+
+```
+As none of the coefficients are $>|0.6|$, we conclude that there are no significant multicollinearities that may affect our results.
+
